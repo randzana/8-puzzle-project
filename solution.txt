@@ -1,51 +1,51 @@
 --- 8-Puzzle Best-FS Solution ---
 
 Initial Board:
-1 | 4 | 5
+1 | 2 |  
 ---------
-7 | 8 | 2
+5 | 3 | 4
 ---------
-  | 3 | 6
+6 | 7 | 8
 
 Steps to solution:
-1. Move Up
-2. Move Up
-3. Move Right
-4. Move Right
-5. Move Down
-6. Move Down
-7. Move Left
+1. Move Down
+2. Move Left
+3. Move Left
+4. Move Down
+5. Move Right
+6. Move Right
+7. Move Up
 8. Move Up
-9. Move Up
-10. Move Right
-11. Move Down
+9. Move Left
+10. Move Down
+11. Move Right
 12. Move Down
 13. Move Left
 14. Move Up
-15. Move Right
-16. Move Up
-17. Move Left
-18. Move Down
-19. Move Down
-20. Move Right
-21. Move Up
-22. Move Up
-23. Move Left
+15. Move Up
+16. Move Right
+17. Move Down
+18. Move Left
+19. Move Left
+20. Move Down
+21. Move Right
+22. Move Right
+23. Move Up
 24. Move Left
-25. Move Down
-26. Move Right
-27. Move Up
-28. Move Left
-29. Move Down
-30. Move Right
-31. Move Right
-32. Move Down
-33. Move Left
-34. Move Left
-35. Move Up
-36. Move Up
-37. Move Right
-38. Move Down
+25. Move Left
+26. Move Down
+27. Move Right
+28. Move Right
+29. Move Up
+30. Move Left
+31. Move Down
+32. Move Left
+33. Move Up
+34. Move Right
+35. Move Right
+36. Move Down
+37. Move Left
+38. Move Up
 39. Move Left
 40. Move Down
 41. Move Right
