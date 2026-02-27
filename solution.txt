@@ -1,0 +1,54 @@
+--- 8-Puzzle Best-FS Solution ---
+
+Initial Board:
+1 | 4 | 5
+---------
+7 | 8 | 2
+---------
+  | 3 | 6
+
+Steps to solution:
+1. Move Up
+2. Move Up
+3. Move Right
+4. Move Right
+5. Move Down
+6. Move Down
+7. Move Left
+8. Move Up
+9. Move Up
+10. Move Right
+11. Move Down
+12. Move Down
+13. Move Left
+14. Move Up
+15. Move Right
+16. Move Up
+17. Move Left
+18. Move Down
+19. Move Down
+20. Move Right
+21. Move Up
+22. Move Up
+23. Move Left
+24. Move Left
+25. Move Down
+26. Move Right
+27. Move Up
+28. Move Left
+29. Move Down
+30. Move Right
+31. Move Right
+32. Move Down
+33. Move Left
+34. Move Left
+35. Move Up
+36. Move Up
+37. Move Right
+38. Move Down
+39. Move Left
+40. Move Down
+41. Move Right
+42. Move Right
+
+Total Cost: 42

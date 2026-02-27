@@ -266,6 +266,7 @@ class PuzzleGUI:
         self.move_count = 0
         self.solving = False
         self.glow_animation_id = None
+        self.play_again_btn = None
 
         self._build_ui()
         self._draw_board()
@@ -378,7 +379,7 @@ class PuzzleGUI:
 
     # ── Drawing helpers ──
 
-    def _draw_rounded_rect(self, canvas, x1, y1, x2, y2, r, fill, outline, width=1):
+    def _draw_rounded_rect(self, canvas, x1, y1, x2, y2, r, fill, outline, width=1, tags=None):
         points = [
             x1 + r, y1, x2 - r, y1,
             x2, y1, x2, y1 + r,
@@ -387,7 +388,55 @@ class PuzzleGUI:
             x1, y2, x1, y2 - r,
             x1, y1 + r, x1, y1,
         ]
-        canvas.create_polygon(points, fill=fill, outline=outline, width=width, smooth=True)
+        kwargs = {"fill": fill, "outline": outline, "width": width, "smooth": True}
+        if tags:
+            kwargs["tags"] = tags
+        canvas.create_polygon(points, **kwargs)
+
+    def _draw_tile_at(self, val, x, y, tag="tiles"):
+        """Draw a single tile at pixel position (x, y)."""
+        is_sliding = (tag == "sliding")
+        if val == 0:
+            self._draw_rounded_rect(self.grid_canvas, x + 2, y + 2,
+                                    x + self.TILE_SIZE - 2, y + self.TILE_SIZE - 2,
+                                    10, COLORS["empty_tile"], "#1a1a30", 1, tags=tag)
+        else:
+            tile_color = TILE_COLORS.get(val, "#555")
+            highlight_color = self._lighten(tile_color, 0.25)
+
+            shadow_offset = 12 if is_sliding else 4
+            shadow_color = "#000000" if is_sliding else "#08080F"
+            dy = -6 if is_sliding else 0
+
+            # Dynamic shadow during movement to give an elevated float effect
+            if is_sliding:
+                # Add an extra soft shadow behind the elevated tile
+                self._draw_rounded_rect(self.grid_canvas, x + shadow_offset//2, y + shadow_offset//2,
+                                        x + self.TILE_SIZE + shadow_offset//2, y + self.TILE_SIZE + shadow_offset//2,
+                                        12, "#11111a", "", 0, tags=tag)
+
+            # Main Shadow
+            self._draw_rounded_rect(self.grid_canvas, x + shadow_offset, y + shadow_offset,
+                                    x + self.TILE_SIZE + shadow_offset - 2, y + self.TILE_SIZE + shadow_offset - 2,
+                                    10, shadow_color, "", 0, tags=tag)
+            # Tile body
+            self._draw_rounded_rect(self.grid_canvas, x, y + dy,
+                                    x + self.TILE_SIZE, y + self.TILE_SIZE + dy,
+                                    10, tile_color, "", 0, tags=tag)
+            # Highlight
+            self._draw_rounded_rect(self.grid_canvas, x + 3, y + 3 + dy,
+                                    x + self.TILE_SIZE - 3, y + self.TILE_SIZE * 0.45 + dy,
+                                    8, "", "", 0, tags=tag)
+            # Inner border
+            self._draw_rounded_rect(self.grid_canvas, x + 1, y + 1 + dy,
+                                    x + self.TILE_SIZE - 1, y + self.TILE_SIZE - 1 + dy,
+                                    10, "", highlight_color, 1, tags=tag)
+            # Number
+            self.grid_canvas.create_text(x + self.TILE_SIZE // 2,
+                                         y + self.TILE_SIZE // 2 + dy,
+                                         text=str(val),
+                                         font=("Helvetica Neue", 32, "bold"),
+                                         fill="#FFFFFF", tags=tag)
 
     def _draw_board(self):
         self.grid_canvas.delete("tiles")
@@ -396,48 +445,46 @@ class PuzzleGUI:
             val = self.state[i]
             x = self.GRID_PADDING + col * (self.TILE_SIZE + self.TILE_GAP)
             y = self.GRID_PADDING + row * (self.TILE_SIZE + self.TILE_GAP)
-
-            if val == 0:
-                # Empty tile — subtle inset
-                self._draw_rounded_rect(self.grid_canvas, x + 2, y + 2,
-                                        x + self.TILE_SIZE - 2, y + self.TILE_SIZE - 2,
-                                        10, COLORS["empty_tile"], "#1a1a30", 1)
-                self.grid_canvas.create_text(x + self.TILE_SIZE // 2, y + self.TILE_SIZE // 2,
-                                             text="", tags="tiles")
-            else:
-                tile_color = TILE_COLORS.get(val, "#555")
-
-                # Shadow
-                self._draw_rounded_rect(self.grid_canvas, x + 3, y + 3,
-                                        x + self.TILE_SIZE + 1, y + self.TILE_SIZE + 1,
-                                        10, "#08080F", "", 0)
-
-                # Tile body
-                self._draw_rounded_rect(self.grid_canvas, x, y,
-                                        x + self.TILE_SIZE, y + self.TILE_SIZE,
-                                        10, tile_color, "", 0)
-
-                # Highlight (top-left shine)
-                highlight_color = self._lighten(tile_color, 0.25)
-                self._draw_rounded_rect(self.grid_canvas, x + 3, y + 3,
-                                        x + self.TILE_SIZE - 3, y + self.TILE_SIZE * 0.45,
-                                        8, "", "", 0)
-
-                # Number
-                self.grid_canvas.create_text(x + self.TILE_SIZE // 2,
-                                             y + self.TILE_SIZE // 2,
-                                             text=str(val),
-                                             font=("Helvetica Neue", 32, "bold"),
-                                             fill="#FFFFFF", tags="tiles")
-
-                # Subtle inner border highlight
-                self._draw_rounded_rect(self.grid_canvas, x + 1, y + 1,
-                                        x + self.TILE_SIZE - 1, y + self.TILE_SIZE - 1,
-                                        10, "", highlight_color, 1)
+            self._draw_tile_at(val, x, y)
 
         # Update heuristic
         h = get_manhattan_distance(self.state)
         self.heuristic_label.config(text=f"Manhattan Distance: {h}")
+
+    def _slide_tile(self, tile_val, from_row, from_col, to_row, to_col, on_complete):
+        """Smoothly slide a tile from one grid cell to another over multiple frames."""
+        total_frames = 20
+        frame_delay = 12  # ~80fps for very smooth rendering
+
+        from_x = self.GRID_PADDING + from_col * (self.TILE_SIZE + self.TILE_GAP)
+        from_y = self.GRID_PADDING + from_row * (self.TILE_SIZE + self.TILE_GAP)
+        to_x = self.GRID_PADDING + to_col * (self.TILE_SIZE + self.TILE_GAP)
+        to_y = self.GRID_PADDING + to_row * (self.TILE_SIZE + self.TILE_GAP)
+
+        dx = to_x - from_x
+        dy = to_y - from_y
+
+        def ease_in_out(t):
+            return t * t * (3 - 2 * t)
+
+        def animate_frame(frame):
+            t = ease_in_out(frame / total_frames)
+            cur_x = from_x + dx * t
+            cur_y = from_y + dy * t
+
+            # Clear only the sliding tile
+            self.grid_canvas.delete("sliding")
+            self._draw_tile_at(tile_val, cur_x, cur_y, tag="sliding")
+
+            if frame < total_frames:
+                self.root.after(frame_delay, animate_frame, frame + 1)
+            else:
+                self.grid_canvas.delete("sliding")
+                on_complete()
+
+        # Draw empty slot at destination first, clear tile at source
+        self._draw_tile_at(0, from_x, from_y)
+        animate_frame(0)
 
     def _lighten(self, hex_color, amount):
         """Lighten a hex color by a given amount (0-1)."""
@@ -486,6 +533,7 @@ class PuzzleGUI:
     def shuffle_board(self):
         if self.solving:
             return
+        self._hide_play_again()
         self.state = self.generate_random_board()
         self.move_count = 0
         self._draw_board()
@@ -495,6 +543,7 @@ class PuzzleGUI:
     def reset_to_goal(self):
         if self.solving:
             return
+        self._hide_play_again()
         self.state = GOAL_STATE
         self.move_count = 0
         self._draw_board()
@@ -544,18 +593,26 @@ class PuzzleGUI:
             action = path[step_idx]
             state_list = list(current_state)
             empty_idx = state_list.index(0)
-            row, col = divmod(empty_idx, 3)
+            empty_row, empty_col = divmod(empty_idx, 3)
 
-            if action == 'Up': next_row, next_col = row - 1, col
-            elif action == 'Down': next_row, next_col = row + 1, col
-            elif action == 'Left': next_row, next_col = row, col - 1
-            elif action == 'Right': next_row, next_col = row, col + 1
+            if action == 'Up': tile_row, tile_col = empty_row - 1, empty_col
+            elif action == 'Down': tile_row, tile_col = empty_row + 1, empty_col
+            elif action == 'Left': tile_row, tile_col = empty_row, empty_col - 1
+            elif action == 'Right': tile_row, tile_col = empty_row, empty_col + 1
 
-            next_idx = next_row * 3 + next_col
-            state_list[empty_idx], state_list[next_idx] = state_list[next_idx], state_list[empty_idx]
+            tile_idx = tile_row * 3 + tile_col
+            tile_val = state_list[tile_idx]
+
+            # Update logical state
+            state_list[empty_idx], state_list[tile_idx] = state_list[tile_idx], state_list[empty_idx]
             next_state = tuple(state_list)
 
-            self.root.after(400, self._animate_solution, next_state, path, step_idx + 1)
+            def on_slide_complete():
+                # Small pause between moves for readability
+                self.root.after(80, self._animate_solution, next_state, path, step_idx + 1)
+
+            # Smooth slide: move the tile from its position into the empty slot
+            self._slide_tile(tile_val, tile_row, tile_col, empty_row, empty_col, on_slide_complete)
         else:
             self.solving = False
             self.status_label.config(
@@ -566,6 +623,8 @@ class PuzzleGUI:
             self.solve_btn.set_disabled(False)
             self.shuffle_btn.set_disabled(False)
             self.reset_btn.set_disabled(False)
+            # Show Play Again button
+            self._show_play_again()
             # Celebration flash
             self._celebrate(0)
 
@@ -583,6 +642,30 @@ class PuzzleGUI:
         self.grid_canvas.create_polygon(points, fill="", outline=colors[step],
                                         width=3, smooth=True, tags="glow_border")
         self.root.after(200, self._celebrate, step + 1)
+
+    def _show_play_again(self):
+        """Show a Play Again button after solving."""
+        if self.play_again_btn is not None:
+            return
+        btn_frame = self.solve_btn.master  # same parent as other buttons
+        self.play_again_btn = GlowButton(btn_frame, "🔄 PLAY AGAIN", COLORS["accent_green"],
+                                          self._play_again, width=376, height=50)
+        self.play_again_btn.grid(row=2, column=0, columnspan=2, padx=12, pady=(12, 0))
+
+    def _hide_play_again(self):
+        """Remove the Play Again button."""
+        if self.play_again_btn is not None:
+            self.play_again_btn.destroy()
+            self.play_again_btn = None
+
+    def _play_again(self):
+        """Shuffle the board and start fresh."""
+        self._hide_play_again()
+        self.state = self.generate_random_board()
+        self.move_count = 0
+        self._draw_board()
+        self.move_label.config(text="Moves: 0")
+        self.status_label.config(text="🟢  NEW GAME — READY", fg=COLORS["accent_green"])
 
     def _show_no_solution(self):
         self.solving = False
